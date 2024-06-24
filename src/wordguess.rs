@@ -81,6 +81,8 @@ impl Game for WordGuess {
     type GameResult = GuessResult;
 
     fn make_guess(&self, guess: &str) -> Result<GuessResult, GameError> {
+        // Check if game is already over
+        self.is_game_over()?;
         // Confirm validity of the guess
         let guess = WordGuessRequest::try_from(guess.to_string())?;
         // Determine the results of the guess
@@ -92,10 +94,18 @@ impl Game for WordGuess {
         self.guesses.len() as u16
     }
 
-    fn is_game_over(&self) -> bool {
-        self.guesses.last().map_or(false, |result| {
+    fn is_game_over(&self) -> Result<(), GameError> {
+
+        if self.guesses.len() >= 6 {
+            return Err(GameError::MaximumGuesses);
+        }
+        if self.guesses.last().map_or(false, |result| {
             result.letters.iter().all(|letter| letter.condition == Condition::Correct)
-        })
+        }) {
+            return Err(GameError::GameOver);
+        }
+
+        Ok(())
     }
 }
 

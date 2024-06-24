@@ -21,7 +21,9 @@ pub enum GameError {
     #[error("{0}")]
     FromWordGuessError(#[from] WordGuessError),
     #[error("You have reached the maximum number of guesses")]
-    MaximumGuesses
+    MaximumGuesses,
+    #[error("You won today's challenge! Try again tomorrow!")]
+    GameOver
 }
 
 

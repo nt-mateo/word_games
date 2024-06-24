@@ -1,5 +1,6 @@
 mod game;
 mod wordguess;
+
 use errors::{DatabaseError, GameError};
 use game::Game;
 use models::{GameStatus, User, UserRequest, WordGuessRequest};
@@ -39,11 +40,13 @@ async fn wordguess_game(
     payload: web::Json<serde_json::Value>,
     req: actix_web::HttpRequest,
 ) -> impl Responder {
+    
     // Deserialize the request
-    let data: WordGuessRequest = match serde_json::from_value::<WordGuessRequest>(payload.into_inner()) {
-        Ok(data) => data,
-        Err(e) => return HttpResponse::BadRequest().body(e.to_string()),
-    };
+    let data: WordGuessRequest =
+        match serde_json::from_value::<WordGuessRequest>(payload.into_inner()) {
+            Ok(data) => data,
+            Err(e) => return HttpResponse::BadRequest().body(e.to_string()),
+        };
 
     let conn = db::initialize_connection(false);
     let _ = &conn.execute(
@@ -54,7 +57,7 @@ async fn wordguess_game(
         )",
         [],
     );
-    
+
     let user = match get_user(req, &conn).await {
         Ok(user) => user,
         Err(e) => {
@@ -80,19 +83,14 @@ async fn wordguess_game(
         _ => panic!("Game status is not WordGuess"),
     };
 
-    // Check if the game is over
-    if word_guess.guesses.len() >= 6 {
-        return HttpResponse::BadRequest().body("You have reached the maximum number of guesses");
-    }
-
     // Make a guess
     let result = match word_guess.make_guess(&data.guess) {
         Ok(guess_result) => guess_result,
         Err(e) => {
             return match e {
                 GameError::FromWordGuessError(e) => HttpResponse::BadRequest().body(e.to_string()),
-                GameError::MaximumGuesses => HttpResponse::BadRequest()
-                    .body("You have reached the maximum number of guesses"),
+                GameError::MaximumGuesses => HttpResponse::BadRequest().body(e.to_string()),
+                GameError::GameOver => HttpResponse::Ok().body(e.to_string()),
                 _ => HttpResponse::InternalServerError().finish(),
             }
         }
@@ -115,6 +113,7 @@ async fn wordguess_game(
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    println!("Starting server...");
     HttpServer::new(|| {
         let json_config = web::JsonConfig::default().limit(75).error_handler(
             |err, _req: &actix_web::HttpRequest| {
@@ -125,7 +124,8 @@ async fn main() -> std::io::Result<()> {
         );
         App::new().service(wordguess_game).app_data(json_config)
     })
-    .bind(("127.0.0.1", 8080))?
+    .bind(("0.0.0.0", 8080))?
+    .shutdown_timeout(10)
     .run()
     .await
 }

@@ -6,8 +6,6 @@ RUN USER=root cargo new --bin word_games
 WORKDIR /word_games
 
 # Install LiteFS dependencies
-# for alpine-based images
-RUN apk add ca-certificates fuse3 sqlite
 # or for debian/ubuntu-based images
 RUN apt-get update -y && apt-get install -y ca-certificates fuse3 sqlite3
 
