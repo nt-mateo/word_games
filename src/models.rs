@@ -1,5 +1,5 @@
 use core::fmt;
-use std::collections::HashMap;
+use std::{collections::{hash_map::DefaultHasher, HashMap}, hash::{Hash, Hasher}};
 
 use palette::{IntoColor, Lch, Mix, Srgb};
 use rand::Rng;
@@ -163,92 +163,105 @@ impl Group {
     }
 }
 
+fn calculate_hash<T: Hash>(t: &T) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    t.hash(&mut hasher);
+    hasher.finish()
+}
+
 lazy_static!{
+
     pub static ref GROUPS: Vec<Group> = vec![
         Group {
-            name: "reiterate".to_string(),
+            name: "hit hard".to_string(),
             ranking: Ranking::Easy,
         },
         Group {
-            name: "mainstay".to_string(),
+            name: "newspaper names".to_string(),
             ranking: Ranking::Medium,
         },
         Group {
-            name: "splashy ways to enter a pool".to_string(),
+            name: "crescent-shaped things".to_string(),
             ranking: Ranking::Hard,
         },
         Group {
-            name: "___ radio".to_string(),
+            name: "power-ups in super mario world".to_string(),
             ranking: Ranking::VeryDifficult,
         },
     ];
 
-    pub static ref WORDS: Vec<Word> = vec![
-        Word {
-            text: "echo".to_string(),
-            group: GROUPS[0].clone(),
-        },
-        Word {
-            text: "backbone".to_string(),
-            group: GROUPS[1].clone(),
-        },
-        Word {
-            text: "parrot".to_string(),
-            group: GROUPS[0].clone(),
-        },
-        Word {
-            text: "ham".to_string(),
-            group: GROUPS[3].clone(),
-        },
-        Word {
-            text: "cannonball".to_string(),
-            group: GROUPS[2].clone(),
-        },
-        Word {
-            text: "quote".to_string(),
-            group: GROUPS[0].clone(),
-        },
-        Word {
-            text: "pillar".to_string(),
-            group: GROUPS[1].clone(),
-        },
-        Word {
-            text: "bellyflop".to_string(),
-            group: GROUPS[2].clone(),
-        },
-        Word {
-            text: "talk".to_string(),
-            group: GROUPS[3].clone(),
-        },
-        Word {
-            text: "cornerstone".to_string(),
-            group: GROUPS[1].clone(),
-        },
-        Word {
-            text: "backflip".to_string(),
-            group: GROUPS[2].clone(),
-        },
-        Word {
-            text: "pirate".to_string(),
-            group: GROUPS[3].clone(),
-        },
-        Word {
-            text: "satellite".to_string(),
-            group: GROUPS[3].clone(),
-        },
-        Word {
-            text: "repeat".to_string(),
-            group: GROUPS[0].clone(),
-        },
-        Word {
-            text: "anchor".to_string(),
-            group: GROUPS[1].clone(),
-        },
-        Word {
-            text: "jackknife".to_string(),
-            group: GROUPS[2].clone(),
-        },
-    ];
+    pub static ref WORDS: Vec<Word> = {
+        let mut original = vec![
+            Word {
+                text: "bang".to_string(),
+                group: GROUPS[0].clone(),
+            },
+            Word {
+                text: "hammer".to_string(),
+                group: GROUPS[0].clone(),
+            },
+            Word {
+                text: "pound".to_string(),
+                group: GROUPS[0].clone(),
+            },
+            Word {
+                text: "slam".to_string(),
+                group: GROUPS[0].clone(),
+            },
+            Word {
+                text: "chronicle".to_string(),
+                group: GROUPS[1].clone(),
+            },
+            Word {
+                text: "herald".to_string(),
+                group: GROUPS[1].clone(),
+            },
+            Word {
+                text: "register".to_string(),
+                group: GROUPS[1].clone(),
+            },
+            Word {
+                text: "sun".to_string(),
+                group: GROUPS[1].clone(),
+            },
+            Word {
+                text: "banana".to_string(),
+                group: GROUPS[2].clone(),
+            },
+            Word {
+                text: "croissant".to_string(),
+                group: GROUPS[2].clone(),
+            },
+            Word {
+                text: "moon".to_string(),
+                group: GROUPS[2].clone(),
+            },
+            Word {
+                text: "sickle".to_string(),
+                group: GROUPS[2].clone(),
+            },
+            Word {
+                text: "feather".to_string(),
+                group: GROUPS[3].clone(),
+            },
+            Word {
+                text: "flower".to_string(),
+                group: GROUPS[3].clone(),
+            },
+            Word {
+                text: "mushroom".to_string(),
+                group: GROUPS[3].clone(),
+            },
+            Word {
+                text: "star".to_string(),
+                group: GROUPS[3].clone(),
+            },
+        ];
+    
+        original.sort_by(|a, b| calculate_hash(a).cmp(&calculate_hash(b)));
+
+        original
+    };
 }
 
 
