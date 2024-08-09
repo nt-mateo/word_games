@@ -166,87 +166,87 @@ impl Group {
 lazy_static!{
     pub static ref GROUPS: Vec<Group> = vec![
         Group {
-            name: "common desserts".to_string(),
+            name: "reiterate".to_string(),
             ranking: Ranking::Easy,
         },
         Group {
-            name: "items found in a stationery store".to_string(),
+            name: "mainstay".to_string(),
             ranking: Ranking::Medium,
         },
         Group {
-            name: "famous detectives in literature".to_string(),
+            name: "splashy ways to enter a pool".to_string(),
             ranking: Ranking::Hard,
         },
         Group {
-            name: "mythical creatures with human traits".to_string(),
+            name: "___ radio".to_string(),
             ranking: Ranking::VeryDifficult,
         },
     ];
 
     pub static ref WORDS: Vec<Word> = vec![
         Word {
-            text: "cake".to_string(),
+            text: "echo".to_string(),
             group: GROUPS[0].clone(),
         },
         Word {
-            text: "pie".to_string(),
+            text: "backbone".to_string(),
+            group: GROUPS[1].clone(),
+        },
+        Word {
+            text: "parrot".to_string(),
             group: GROUPS[0].clone(),
         },
         Word {
-            text: "pudding".to_string(),
+            text: "ham".to_string(),
+            group: GROUPS[3].clone(),
+        },
+        Word {
+            text: "cannonball".to_string(),
+            group: GROUPS[2].clone(),
+        },
+        Word {
+            text: "quote".to_string(),
             group: GROUPS[0].clone(),
         },
         Word {
-            text: "cookie".to_string(),
+            text: "pillar".to_string(),
+            group: GROUPS[1].clone(),
+        },
+        Word {
+            text: "bellyflop".to_string(),
+            group: GROUPS[2].clone(),
+        },
+        Word {
+            text: "talk".to_string(),
+            group: GROUPS[3].clone(),
+        },
+        Word {
+            text: "cornerstone".to_string(),
+            group: GROUPS[1].clone(),
+        },
+        Word {
+            text: "backflip".to_string(),
+            group: GROUPS[2].clone(),
+        },
+        Word {
+            text: "pirate".to_string(),
+            group: GROUPS[3].clone(),
+        },
+        Word {
+            text: "satellite".to_string(),
+            group: GROUPS[3].clone(),
+        },
+        Word {
+            text: "repeat".to_string(),
             group: GROUPS[0].clone(),
         },
         Word {
-            text: "pen".to_string(),
+            text: "anchor".to_string(),
             group: GROUPS[1].clone(),
         },
         Word {
-            text: "notebook".to_string(),
-            group: GROUPS[1].clone(),
-        },
-        Word {
-            text: "stapler".to_string(),
-            group: GROUPS[1].clone(),
-        },
-        Word {
-            text: "envelope".to_string(),
-            group: GROUPS[1].clone(),
-        },
-        Word {
-            text: "holmes".to_string(),
+            text: "jackknife".to_string(),
             group: GROUPS[2].clone(),
-        },
-        Word {
-            text: "poirot".to_string(),
-            group: GROUPS[2].clone(),
-        },
-        Word {
-            text: "marple".to_string(),
-            group: GROUPS[2].clone(),
-        },
-        Word {
-            text: "spade".to_string(),
-            group: GROUPS[2].clone(),
-        },
-        Word {
-            text: "centaur".to_string(),
-            group: GROUPS[3].clone(),
-        },
-        Word {
-            text: "mermaid".to_string(),
-            group: GROUPS[3].clone(),
-        },
-        Word {
-            text: "minotaur".to_string(),
-            group: GROUPS[3].clone(),
-        },
-        Word {
-            text: "sphinx".to_string(),
-            group: GROUPS[3].clone(),
         },
     ];
 }
