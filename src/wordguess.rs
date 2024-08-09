@@ -1,11 +1,15 @@
+use std::fmt;
+
 use serde::{Deserialize, Serialize};
 
-use crate::{errors::{GameError, GuessError, WordGuessError}, game::Game, models::WordGuessRequest};
+use crate::{errors::GameError, game::Game};
 
-const WORD_OF_THE_DAY: &str = "orate";
+static WORD_OF_THE_DAY: &str = "orate";
+static MAXIMUM_GUESSES: usize = 6;
+static LETTERS: usize = 5;
 
 /// Represents the condition of a letter in the word
-#[derive(PartialEq, Debug, Serialize, Deserialize)]
+#[derive(PartialEq, Debug, Serialize, Deserialize, Clone)]
 enum Condition {
     NotFound,
     Missplaced,
@@ -13,6 +17,7 @@ enum Condition {
 }
 
 impl Condition {
+    #[allow(dead_code)]
     fn to_str(&self) -> &str {
         match self {
             Condition::NotFound => "Not Found",
@@ -25,106 +30,129 @@ impl Condition {
 /// Represents a letter in the guessed word\
 /// `value`: The letter\
 /// `condition`: The condition of the letter
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 struct Letter {
     value: char,
     condition: Condition,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct GuessResult {
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct WordResult {
     letters: Vec<Letter>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+impl fmt::Display for WordResult {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for letter in &self.letters {
+            write!(f, "{}", letter.value)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct WordGuess {
-    pub guesses: Vec<GuessResult>
+    pub guesses: Vec<WordResult>,
+    #[serde(skip)]
+    pub answer: String,
+    maximum_guesses: usize,
 }
 
 impl WordGuess {
-    /// Create a new WordGuess game\
-    /// ### Parameters
-    /// `guesses`: The guesses that have been made. If none are provided, an empty vector is used
     pub fn new() -> Self {
         WordGuess {
-            guesses: Vec::new()
+            guesses: Vec::new(),
+            answer: WORD_OF_THE_DAY.to_string(),
+            maximum_guesses: MAXIMUM_GUESSES,
         }
     }
 
-    fn determine_results(guess: &str, actual: &str) -> GuessResult {
+    #[allow(dead_code)]
+    pub fn to_vec(&self) -> Vec<String> {
+        self.guesses.iter().map(|guess| guess.to_string()).collect()
+    }
+}
+
+impl Game<&str, String> for WordGuess {
+    type State = Self;
+    type GameError = GameError;
+    type GameResult = WordResult;
+
+    fn guess(&self, guess: &str) -> Result<Self, GameError> {
+        self.clean(guess)?;
+
+        let result = self.process(guess.to_string())?;
+        Ok(WordGuess {
+            guesses: {
+                let mut new_guesses = self.guesses.clone();
+                new_guesses.push(result);
+                new_guesses
+            },
+            maximum_guesses: self.maximum_guesses,
+            answer: self.answer.clone(),
+        })
+    }
+
+    fn process(&self, guess: String) -> Result<WordResult, GameError> {
         let mut letters = Vec::new();
         // Iterate through the letters
         for (i, c) in guess.chars().enumerate() {
             // Determine if the letter is in the right spot, if it exists, or if it's not found at all
             // Iterate through the answer
-            let condition = match actual.chars().nth(i) {
+            let condition = match self.answer.chars().nth(i) {
                 // The answer & guess letter match
                 Some(letter) if letter == c => Condition::Correct,
                 // The letter was found in the answer, but not the correct position
-                Some(_) if actual.contains(c) => Condition::Missplaced,
+                Some(_) if self.answer.contains(c) => Condition::Missplaced,
                 // It was not found
                 _ => Condition::NotFound,
             };
+
             letters.push(Letter {
                 value: c,
                 condition,
             });
         }
-        GuessResult { letters }
-    }
-    
-}
-
-impl Game for WordGuess {
-    type Guess = String;
-    type GameError = GameError;
-    type GameResult = GuessResult;
-
-    fn make_guess(&self, guess: &str) -> Result<GuessResult, GameError> {
-        // Check if game is already over
-        self.is_game_over()?;
-        // Confirm validity of the guess
-        let guess = WordGuessRequest::try_from(guess.to_string())?;
-        // Determine the results of the guess
-        Ok(WordGuess::determine_results(&guess.guess, WORD_OF_THE_DAY))
-    }
-    
-
-    fn get_score(&self) -> u16 {
-        self.guesses.len() as u16
+        Ok(WordResult { letters })
     }
 
-    fn is_game_over(&self) -> Result<(), GameError> {
-
-        if self.guesses.len() >= 6 {
+    fn clean(&self, guess: &str) -> Result<String, Self::GameError> {
+        // * Maximum guesses
+        if self.guesses.len() >= MAXIMUM_GUESSES {
             return Err(GameError::MaximumGuesses);
         }
-        if self.guesses.last().map_or(false, |result| {
-            result.letters.iter().all(|letter| letter.condition == Condition::Correct)
-        }) {
+
+        // * The guess length is equal to `LETTERS`
+        if guess.chars().count() != LETTERS {
+            return Err(GameError::InvalidGuess(
+                "Guess must be 5 letters".to_string(),
+            ));
+        }
+
+        // * The guess is a valid word
+        if !guess.chars().all(char::is_alphabetic) {
+            return Err(GameError::InvalidGuess("Guess must be a word".to_string()));
+        }
+
+        // * The guess hasn't been made before
+        if self
+            .guesses
+            .iter()
+            .any(|g| g.to_string().to_lowercase() == guess.to_lowercase())
+        {
+            return Err(GameError::InvalidGuess("Guess already made.".to_string()));
+        }
+
+        // * The answer hasn't been guessed
+        if self
+            .guesses
+            .iter()
+            .any(|g| g.to_string().to_lowercase() == WORD_OF_THE_DAY)
+        {
             return Err(GameError::GameOver);
         }
 
-        Ok(())
-    }
-}
-
-impl TryFrom<String> for WordGuessRequest {
-    type Error = WordGuessError;
-
-    fn try_from(value: String) -> Result<WordGuessRequest, WordGuessError> {
-        // Confirm length of the guess
-        if value.len() != 5 {
-            return Err(GuessError::InvalidLength.into());
-        }
-        // Confirm that each character is exclusively a letter
-        if !value.chars().all(char::is_alphabetic) {
-            return Err(GuessError::InvalidWord.into());
-        }
-
-        return Ok(WordGuessRequest {
-            guess: value.to_lowercase(),
-        });
+        Ok(guess.to_lowercase())
     }
 }
 
@@ -133,16 +161,30 @@ mod tests {
     use super::*;
 
     const WORDS: [&str; 6] = ["peets", "steep", "steer", "orate", "radar", "beats"];
+    fn setup(answer: Option<&str>) -> WordGuess {
+        WordGuess {
+            guesses: Vec::new(),
+            answer: answer.unwrap_or(WORD_OF_THE_DAY).to_string(),
+            maximum_guesses: MAXIMUM_GUESSES,
+        }
+    }
 
     #[test]
     fn test_determine_results_perfect() {
         for word in WORDS.iter() {
-            let result = WordGuess::determine_results(word, word);
-            assert_eq!(result.letters[0].condition, Condition::Correct);
-            assert_eq!(result.letters[1].condition, Condition::Correct);
-            assert_eq!(result.letters[2].condition, Condition::Correct);
-            assert_eq!(result.letters[3].condition, Condition::Correct);
-            assert_eq!(result.letters[4].condition, Condition::Correct);
+            let game = setup(Some(word));
+            let guess_result = game.guess(word).unwrap();
+            let first_guess = guess_result.guesses.first().unwrap();
+
+            // Assert that every letter in the guess is marked as 'Correct'
+            for (i, letter) in first_guess.letters.iter().enumerate() {
+                assert_eq!(
+                    letter.condition,
+                    Condition::Correct,
+                    "Letter at index {} should be Correct",
+                    i
+                );
+            }
         }
     }
 
@@ -157,23 +199,27 @@ mod tests {
                 _ => copied[2] = 'a',
             }
 
-            let result =
-                WordGuess::determine_results(&copied.into_iter().collect::<String>(), word);
-            assert_eq!(result.letters[0].condition, Condition::Correct);
-            assert_eq!(result.letters[1].condition, Condition::Correct);
-            assert_ne!(result.letters[2].condition, Condition::Correct);
-            assert_eq!(result.letters[3].condition, Condition::Correct);
-            assert_eq!(result.letters[4].condition, Condition::Correct);
+            let game = setup(Some(word));
+            let guess_result = game.guess(word).unwrap();
+            let first_guess = guess_result.guesses.first().unwrap();
+
+            assert_eq!(first_guess.letters[0].condition, Condition::Correct);
+            assert_eq!(first_guess.letters[1].condition, Condition::Correct);
+            assert_ne!(first_guess.letters[2].condition, Condition::Correct);
+            assert_eq!(first_guess.letters[3].condition, Condition::Correct);
+            assert_eq!(first_guess.letters[4].condition, Condition::Correct);
         }
     }
 
     #[test]
     fn test_determine_results_so_wrong_so_right() {
-        let result = WordGuess::determine_results("peets", "steep");
-        assert_eq!(result.letters[0].condition, Condition::Missplaced);
-        assert_eq!(result.letters[1].condition, Condition::Missplaced);
-        assert_eq!(result.letters[2].condition, Condition::Correct);
-        assert_eq!(result.letters[3].condition, Condition::Missplaced);
-        assert_eq!(result.letters[4].condition, Condition::Missplaced);
+        let game = setup(Some("peets"));
+        let guess_result = game.guess("steep").unwrap();
+        let first_guess = guess_result.guesses.first().unwrap();
+        assert_eq!(first_guess.letters[0].condition, Condition::Missplaced);
+        assert_eq!(first_guess.letters[1].condition, Condition::Missplaced);
+        assert_eq!(first_guess.letters[2].condition, Condition::Correct);
+        assert_eq!(first_guess.letters[3].condition, Condition::Missplaced);
+        assert_eq!(first_guess.letters[4].condition, Condition::Missplaced);
     }
 }

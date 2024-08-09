@@ -1,8 +1,9 @@
+use std::collections::HashMap;
+
 use rusqlite::{params, Connection};
 use crate::models::{GameStatus, User, UserRequest};
 use crate::errors::DatabaseError;
 use crate::token::create_token;
-use serde_json;
 
 /// Initializes a connection to the database
 /// ### Arguments
@@ -29,24 +30,28 @@ pub fn initialize_connection(in_memory: bool) -> rusqlite::Connection {
 /// This **does not** insert a new user to the database. It only retrieves or creates a user in-memory.
 /// A user must be updated with `update_user_game_status` to be inserted into the database.
 pub fn get_user(conn: &Connection, request: UserRequest) -> Result<User, DatabaseError> {
-
     match request {
         UserRequest::Tokens {
             stale_token,
             fresh_token,
         } => {
-            let mut stmt = conn.prepare("SELECT stale_token, fresh_token, game_status FROM users WHERE stale_token = ? AND fresh_token = ?")?;
-            let mut rows = stmt.query(params![stale_token, fresh_token])?;
+            let mut stmt = conn.prepare(
+                "SELECT stale_token, fresh_token, game_status FROM users WHERE stale_token = ? AND fresh_token = ?",
+            ).map_err(DatabaseError::FromSQLError)?;
 
-            if let Some(row) = rows.next()? {
-                let game_status: String = row.get(2)?;
-                let game_status: GameStatus = serde_json::from_str(&game_status)
-                    .map_err(|e| DatabaseError::GameStatusParseError(e.to_string()))?;
+            let mut rows = stmt.query(params![stale_token, fresh_token])
+                .map_err(DatabaseError::FromSQLError)?;
+
+            if let Some(row) = rows.next().map_err(DatabaseError::FromSQLError)? {
+                let game_status_json: String = row.get(2).map_err(DatabaseError::FromSQLError)?;
+                let game_status_map: HashMap<String, GameStatus> =
+                    serde_json::from_str(&game_status_json)
+                        .map_err(|e| DatabaseError::GameStatusParseError(e.to_string()))?;
 
                 Ok(User {
-                    stale_token: row.get(0)?,
-                    fresh_token: row.get(1)?,
-                    game_status: Some(game_status),
+                    stale_token: row.get(0).map_err(DatabaseError::FromSQLError)?,
+                    fresh_token: Some(row.get(1).map_err(DatabaseError::FromSQLError)?),
+                    game_status: game_status_map,
                 })
             } else {
                 Err(DatabaseError::FromSQLError(
@@ -60,31 +65,44 @@ pub fn get_user(conn: &Connection, request: UserRequest) -> Result<User, Databas
             Ok(User {
                 stale_token: new_stale_token,
                 fresh_token: None,
-                game_status: None,
+                game_status: HashMap::new(),
             })
         }
     }
 }
 
-/// Updates the user's game status and fresh token after an action is performed.
-/// If the user does not exist, it will be created.
-/// ### Arguments
-/// * `conn` - A reference to the database connection
-/// * `stale_token` - The stale token of the user
-/// * `new_game_status` - The new game status to update
-/// ### Returns
-/// A new fresh token
-/// ### Errors
-/// Returns a `DatabaseError` if there is an issue with the database.
 pub fn update_user_game_status(
     conn: &Connection,
     stale_token: &str,
     new_game_status: &GameStatus,
 ) -> Result<String, DatabaseError> {
     let new_fresh_token = create_token();
-    let new_game_status_json = serde_json::to_string(&new_game_status)
+
+    let key = new_game_status.to_string();
+
+    // Retrieve the existing game status from the database
+    let mut stmt = conn.prepare("SELECT game_status FROM users WHERE stale_token = ?1")
+        .map_err(DatabaseError::FromSQLError)?;
+
+    let mut rows = stmt.query(params![stale_token])
+        .map_err(DatabaseError::FromSQLError)?;
+
+    let mut game_status_map: HashMap<String, GameStatus> = if let Some(row) = rows.next().map_err(DatabaseError::FromSQLError)? {
+        let game_status_json: String = row.get(0).map_err(DatabaseError::FromSQLError)?;
+        serde_json::from_str(&game_status_json).map_err(|e| DatabaseError::GameStatusParseError(e.to_string()))?
+    } else {
+        // If no existing entry, create a new HashMap
+        HashMap::new()
+    };
+
+    // Update the HashMap with the new game status
+    game_status_map.insert(key.to_string(), new_game_status.clone());
+
+    // Serialize the updated HashMap back to JSON
+    let new_game_status_json = serde_json::to_string(&game_status_map)
         .map_err(|e| DatabaseError::GameStatusParseError(e.to_string()))?;
 
+    // Insert or update the user record in the database
     conn.execute(
         "INSERT INTO users (stale_token, fresh_token, game_status) VALUES (?1, ?2, ?3)
              ON CONFLICT(stale_token) DO UPDATE SET
@@ -102,13 +120,13 @@ pub fn get_all_users(conn: &Connection) -> Result<Vec<User>, DatabaseError> {
     let mut stmt = conn.prepare("SELECT stale_token, fresh_token, game_status FROM users")?;
     let user_iter = stmt.query_map([], |row| {
         let game_status: String = row.get(2)?;
-        let game_status: GameStatus = serde_json::from_str(&game_status)
+        let game_status: HashMap<String, GameStatus> = serde_json::from_str(&game_status)
             .map_err(|_| rusqlite::Error::InvalidQuery)?;
 
         Ok(User {
             stale_token: row.get(0)?,
             fresh_token: Some(row.get(1)?),
-            game_status: Some(game_status),
+            game_status,
         })
     })?;
 
@@ -156,6 +174,12 @@ mod tests {
     }
 
     #[test]
+    fn test_reset_database(){
+        let conn = setup_test_db();
+        reset_database(&conn).unwrap();
+    }
+
+    #[test]
     fn test_create_new_user() {
         let conn = setup_test_db();
         let user_request = UserRequest::NewUser;
@@ -164,7 +188,7 @@ mod tests {
 
         assert!(user.stale_token.len() > 0);
         assert!(user.fresh_token.is_none());
-        assert!(user.game_status.is_none());
+
     }
 
     #[test]
@@ -174,7 +198,7 @@ mod tests {
         // Create new user locally
         let user = get_user(&conn, user_request).unwrap();
 
-        let new_game_status = GameStatus::WordGuess(WordGuess { guesses: vec![] });
+        let new_game_status = GameStatus::WordGuess(WordGuess::new());
 
         let new_token = update_user_game_status(&conn, &user.stale_token, &new_game_status).unwrap();
 
@@ -192,7 +216,6 @@ mod tests {
 
         assert_eq!(updated_user.stale_token, user.stale_token);
         assert!(updated_user.fresh_token.is_some());
-        assert!(updated_user.game_status.is_some());
     }
 
     #[test]
@@ -244,7 +267,7 @@ mod tests {
         let token = update_user_game_status(
             &conn,
             &user.stale_token,
-            &GameStatus::WordGuess(WordGuess { guesses: vec![] })
+            &GameStatus::WordGuess(WordGuess::new())
         ).unwrap();
 
         // Verify user exists
