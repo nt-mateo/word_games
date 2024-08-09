@@ -173,94 +173,43 @@ lazy_static!{
 
     pub static ref GROUPS: Vec<Group> = vec![
         Group {
-            name: "hit hard".to_string(),
+            name: "appetizer unit".to_string(),
             ranking: Ranking::Easy,
         },
         Group {
-            name: "newspaper names".to_string(),
+            name: "response to a correct answer".to_string(),
             ranking: Ranking::Medium,
         },
         Group {
-            name: "crescent-shaped things".to_string(),
+            name: "mar".to_string(),
             ranking: Ranking::Hard,
         },
         Group {
-            name: "power-ups in super mario world".to_string(),
+            name: "____ jack".to_string(),
             ranking: Ranking::VeryDifficult,
         },
     ];
 
     pub static ref WORDS: Vec<Word> = {
-        let mut original = vec![
-            Word {
-                text: "bang".to_string(),
-                group: GROUPS[0].clone(),
-            },
-            Word {
-                text: "hammer".to_string(),
-                group: GROUPS[0].clone(),
-            },
-            Word {
-                text: "pound".to_string(),
-                group: GROUPS[0].clone(),
-            },
-            Word {
-                text: "slam".to_string(),
-                group: GROUPS[0].clone(),
-            },
-            Word {
-                text: "chronicle".to_string(),
-                group: GROUPS[1].clone(),
-            },
-            Word {
-                text: "herald".to_string(),
-                group: GROUPS[1].clone(),
-            },
-            Word {
-                text: "register".to_string(),
-                group: GROUPS[1].clone(),
-            },
-            Word {
-                text: "sun".to_string(),
-                group: GROUPS[1].clone(),
-            },
-            Word {
-                text: "banana".to_string(),
-                group: GROUPS[2].clone(),
-            },
-            Word {
-                text: "croissant".to_string(),
-                group: GROUPS[2].clone(),
-            },
-            Word {
-                text: "moon".to_string(),
-                group: GROUPS[2].clone(),
-            },
-            Word {
-                text: "sickle".to_string(),
-                group: GROUPS[2].clone(),
-            },
-            Word {
-                text: "feather".to_string(),
-                group: GROUPS[3].clone(),
-            },
-            Word {
-                text: "flower".to_string(),
-                group: GROUPS[3].clone(),
-            },
-            Word {
-                text: "mushroom".to_string(),
-                group: GROUPS[3].clone(),
-            },
-            Word {
-                text: "star".to_string(),
-                group: GROUPS[3].clone(),
-            },
+        let options = vec![
+            "book", "bounce", "run", "split",
+            "fox", "ibex", "lynx", "oryx",
+            "ebony", "jet", "onyx", "raven",
+            "ash", "black", "cyber", "fat"
         ];
-    
-        original.sort_by(|a, b| calculate_hash(a).cmp(&calculate_hash(b)));
 
-        original
+        // Add the groups to the words
+        // Using a different group every 4 words
+        let mut words = vec![];
+        for (i, option) in options.iter().enumerate() {
+            words.push(Word {
+                text: option.to_string(),
+                group: GROUPS[i / 4].clone(),
+            });
+        }
+        words.sort_by(|a, b| calculate_hash(a).cmp(&calculate_hash(b)));
+
+        words
     };
 }
 
