@@ -173,29 +173,29 @@ lazy_static!{
 
     pub static ref GROUPS: Vec<Group> = vec![
         Group {
-            name: "appetizer unit".to_string(),
+            name: "things that are red".to_string(),
             ranking: Ranking::Easy,
         },
         Group {
-            name: "response to a correct answer".to_string(),
+            name: "be in commission".to_string(),
             ranking: Ranking::Medium,
         },
         Group {
-            name: "mar".to_string(),
+            name: "microsoft products".to_string(),
             ranking: Ranking::Hard,
         },
         Group {
-            name: "____ jack".to_string(),
+            name: "biopics".to_string(),
             ranking: Ranking::VeryDifficult,
         },
     ];
 
     pub static ref WORDS: Vec<Word> = {
         let options = vec![
-            "book", "bounce", "run", "split",
-            "fox", "ibex", "lynx", "oryx",
-            "ebony", "jet", "onyx", "raven",
-            "ash", "black", "cyber", "fat"
+            "devil", "mars", "rose", "strawbery",
+            "function", "operate", "run", "work",
+            "edge", "office", "teams", "windows",
+            "blonde", "jobs", "milk", "vice"
         ];
 
         // Add the groups to the words
