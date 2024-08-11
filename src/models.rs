@@ -173,29 +173,29 @@ lazy_static!{
 
     pub static ref GROUPS: Vec<Group> = vec![
         Group {
-            name: "things that are red".to_string(),
+            name: "large boat".to_string(),
             ranking: Ranking::Easy,
         },
         Group {
-            name: "be in commission".to_string(),
+            name: "all-time great".to_string(),
             ranking: Ranking::Medium,
         },
         Group {
-            name: "microsoft products".to_string(),
+            name: "regarding".to_string(),
             ranking: Ranking::Hard,
         },
         Group {
-            name: "biopics".to_string(),
+            name: "homophones of body features".to_string(),
             ranking: Ranking::VeryDifficult,
         },
     ];
 
     pub static ref WORDS: Vec<Word> = {
         let options = vec![
-            "devil", "mars", "rose", "strawbery",
-            "function", "operate", "run", "work",
-            "edge", "office", "teams", "windows",
-            "blonde", "jobs", "milk", "vice"
+            "best", "champ", "goat", "legend",
+            "about", "concerning", "on", "toward",
+            "hare", "i", "mussel", "naval",
+            "barge", "craft", "ship", "vessel",
         ];
 
         // Add the groups to the words
