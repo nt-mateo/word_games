@@ -5,12 +5,6 @@ FROM rust:latest as builder
 RUN USER=root cargo new --bin word_games
 WORKDIR /word_games
 
-# Install LiteFS dependencies
-# or for debian/ubuntu-based images
-RUN apt-get update -y && apt-get install -y ca-certificates fuse3 sqlite3
-COPY --from=flyio/litefs:0.5 /usr/local/bin/litefs /usr/local/bin/litefs
-ENTRYPOINT litefs mount
-
 # Copy your manifests
 COPY ./Cargo.lock ./Cargo.lock
 COPY ./Cargo.toml ./Cargo.toml

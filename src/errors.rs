@@ -23,4 +23,6 @@ pub enum GameError {
     GameOver,
     #[error("{0}")]
     InvalidGuess(String),
+    #[error("Network error: {0}")]
+    NetworkError(String)
 }

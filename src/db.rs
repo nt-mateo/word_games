@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
+use chrono::{Duration, Local};
 use rusqlite::{params, Connection};
+use serde::de::DeserializeOwned;
 use crate::models::{GameStatus, User, UserRequest};
 use crate::errors::DatabaseError;
 use crate::token::create_token;
@@ -11,12 +13,30 @@ use crate::token::create_token;
 /// 
 /// In-memory databases are useful for testing and development as they are destroyed when the program exits.
 pub fn initialize_connection(in_memory: bool) -> rusqlite::Connection {
-    if in_memory {
+    let users_table_creation = "CREATE TABLE IF NOT EXISTS users (
+                stale_token TEXT PRIMARY KEY,
+                fresh_token TEXT NOT NULL,
+                game_status TEXT
+            )";
+
+    let game_cache_table_creation = "CREATE TABLE IF NOT EXISTS game_cache (
+                day_id TEXT PRIMARY KEY,
+                game_cache TEXT NOT NULL
+            )";
+
+    let conn = if in_memory {
         rusqlite::Connection::open_in_memory().expect("Failed to open in-memory database")
     } else {
         rusqlite::Connection::open("database.sqlite").expect("Failed to open database")
-    }
+    };
+
+    // Execute table creation statements
+    conn.execute(users_table_creation, []).expect("Failed to create users table");
+    conn.execute(game_cache_table_creation, []).expect("Failed to create game_cache table");
+
+    conn
 }
+
 
 /// Retrieves a user from the database or creates a new user (IN-MEMORY) if it does not exist.
 /// ### Arguments
@@ -152,6 +172,62 @@ pub fn reset_database(conn: &Connection) -> Result<(), DatabaseError> {
     Ok(())
 }
 
+pub fn store_game_cache<T>(conn: &Connection, game: &T, day_offset: usize) -> Result<(), DatabaseError> 
+where T: serde::Serialize
+{
+    let game_cache_json = serde_json::to_string(game)
+        .map_err(|e| DatabaseError::GameStatusParseError(e.to_string()))?;
+
+    // Use the day_offset to generate a unique formatted string
+    let yesterday = Local::now() - Duration::days(day_offset as i64);
+    let yesterday_formatted = yesterday.format("%B-%d-%Y")
+        .to_string()
+        .to_lowercase()
+        .chars()
+        .filter(|c| c.is_alphanumeric())
+        .collect::<String>();
+    
+    // Use `yesterday_formatted` as the primary key
+    conn.execute(
+        "INSERT INTO game_cache (day_id, game_cache) VALUES (?1, ?2)
+             ON CONFLICT(day_id) DO UPDATE SET
+             game_cache = excluded.game_cache",
+        params![yesterday_formatted, game_cache_json],
+    )
+    .map_err(DatabaseError::FromSQLError)?;
+
+    Ok(())
+}
+
+pub fn get_game_cache<T>(conn: &Connection, day_offset: usize) -> Result<T, DatabaseError>
+where
+    T: DeserializeOwned,
+{
+    // Calculate the unique ID using the day_offset
+    let yesterday = Local::now() - Duration::days(day_offset as i64);
+    let yesterday_formatted = yesterday
+        .format("%B-%d-%Y")
+        .to_string()
+        .to_lowercase()
+        .chars()
+        .filter(|c| c.is_alphanumeric())
+        .collect::<String>();
+
+    // SQL query to get the game cache entry
+    let mut stmt = conn.prepare("SELECT game_cache FROM game_cache WHERE day_id = ?1")
+        .map_err(DatabaseError::FromSQLError)?;
+
+    // Execute the query and fetch the result
+    let game_cache_json: String = stmt
+        .query_row([&yesterday_formatted], |row| row.get(0))
+        .map_err(DatabaseError::FromSQLError)?;
+
+    // Deserialize the JSON string into the expected type T
+    let game_cache: T = serde_json::from_str(&game_cache_json)
+        .map_err(|e| DatabaseError::GameStatusParseError(e.to_string()))?;
+
+    Ok(game_cache)
+}
 
 #[cfg(test)]
 mod tests {

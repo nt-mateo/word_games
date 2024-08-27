@@ -1,13 +1,11 @@
 use core::fmt;
-use std::{collections::{hash_map::DefaultHasher, HashMap}, hash::{Hash, Hasher}};
+use std::{collections::HashMap, hash::Hash};
 
 use palette::{IntoColor, Lch, Mix, Srgb};
 use rand::Rng;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use schemars::{schema_for, JsonSchema};
 use crate::{errors::GameError, groupthem::GroupThem, wordguess::WordGuess};
-use lazy_static::lazy_static;
-use serde::de::Error as DeError;
 
 /*
     HTTP Request Models
@@ -101,6 +99,16 @@ impl Ranking {
             Ranking::VeryDifficult => "Very Difficult",
         }
     }
+
+    pub fn from_index(index: usize) -> Self {
+        match index {
+            0 => Ranking::Easy,
+            1 => Ranking::Medium,
+            2 => Ranking::Hard,
+            3 => Ranking::VeryDifficult,
+            _ => Ranking::Easy,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Hash, Clone)]
@@ -163,87 +171,11 @@ impl Group {
     }
 }
 
-fn calculate_hash<T: Hash>(t: &T) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    t.hash(&mut hasher);
-    hasher.finish()
-}
 
-lazy_static!{
-
-    pub static ref GROUPS: Vec<Group> = vec![
-        Group {
-            name: "large boat".to_string(),
-            ranking: Ranking::Easy,
-        },
-        Group {
-            name: "all-time great".to_string(),
-            ranking: Ranking::Medium,
-        },
-        Group {
-            name: "regarding".to_string(),
-            ranking: Ranking::Hard,
-        },
-        Group {
-            name: "homophones of body features".to_string(),
-            ranking: Ranking::VeryDifficult,
-        },
-    ];
-
-    pub static ref WORDS: Vec<Word> = {
-        let options = vec![
-            "best", "champ", "goat", "legend",
-            "about", "concerning", "on", "toward",
-            "hare", "i", "mussel", "naval",
-            "barge", "craft", "ship", "vessel",
-        ];
-
-        // Add the groups to the words
-        // Using a different group every 4 words
-        let mut words = vec![];
-        for (i, option) in options.iter().enumerate() {
-            words.push(Word {
-                text: option.to_string(),
-                group: GROUPS[i / 4].clone(),
-            });
-        }
-        words.sort_by(|a, b| calculate_hash(a).cmp(&calculate_hash(b)));
-
-        words
-    };
-}
-
-
-#[derive(Debug, PartialEq, Hash, Eq, Clone)]
+#[derive(Debug, PartialEq, Hash, Eq, Clone, Serialize, Deserialize)]
 pub struct Word {
     pub text: String,
     pub group: Group,
-}
-
-impl<'de> Deserialize<'de> for Word {
-    fn deserialize<D>(deserializer: D) -> Result<Word, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let text = String::deserialize(deserializer)?;
-        match WORDS.iter().find(|word| word.text == text) {
-            Some(word) => Ok(word.clone()), // Return the found word
-            None => Err(D::Error::custom(format!(
-                "`{}` is not a valid word",
-                text
-            ))),
-        }
-    }
-}
-
-impl Serialize for Word {
-    // Strip the group from the serialization
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(&self.text)
-    }
 }
 
 impl Word {

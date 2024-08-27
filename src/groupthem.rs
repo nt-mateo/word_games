@@ -1,8 +1,10 @@
-use std::collections::HashSet;
+use chrono::{Duration, Local};
+use regex::Regex;
+use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
-
+use std::{collections::{hash_map::DefaultHasher, HashSet}, hash::{Hash, Hasher}};
 use crate::{
-    errors::GameError, game::Game, models::{mix_colors, GroupResult, Word}
+    db, errors::GameError, game::Game, models::{mix_colors, Group, GroupResult, Ranking, Word}
 };
 
 static MAXIMUM_BAD_GUESSES: u8 = 4;
@@ -14,6 +16,98 @@ static ITEMS_PER_GROUP: usize = 4;
 pub struct GroupThem {
     pub guesses: Vec<GroupResult>,
     pub available_words: Vec<Word>,
+}
+
+
+pub async fn get_data(conn: &Connection, date_offset: usize) -> Result<(Vec<Group>, Vec<Word>), GameError> {
+
+    if let Ok(cache) = db::get_game_cache::<(Vec<Group>, Vec<Word>)>(&conn, date_offset) {
+        return Ok(cache)
+    }
+    println!("*****************************************");
+    println!("Hey! You are using a third-party service to get the game state. This service could not be possible without the operation and maintenance of https://www.connections-answer.com . Please check them out and buy the author a coffee if this helps!");
+    println!("*****************************************");
+
+    fn calculate_hash<T: Hash>(t: &T) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        t.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    fn remove_unwanted_characters(input: &str) -> String {
+        // Get rid of dem pesky emojis
+        input.chars()
+            .filter(|&c| c.is_ascii() || (c as u32) <= 0xFFFF)
+            .collect()
+        
+    }
+
+    let date = Local::now() - Duration::days(
+        date_offset.min(365).max(0) as i64
+    );
+    let date_formatted = date.format("%B-%d-%Y").to_string().to_lowercase();
+    
+    let url = format!("https://www.connections-answer.com/posts/nyt-connections-answer-hint-{}", date_formatted);
+
+    let response = reqwest::get(&url)
+    .await
+    .map_err(
+        |e| GameError::NetworkError(e.to_string())
+    )?
+    .text()
+    .await
+    .map_err(
+        |e| GameError::NetworkError(e.to_string())
+    )?;
+    // Set text to <h2>
+    let sliced = response.split("<h2 id=what-is-the-answer-to-connections-today>").collect::<Vec<&str>>()[1];
+
+    // Get the first <ul> element and extract all content in-between
+    let start = sliced.find("<ul>").unwrap();
+    let end = sliced.find("</ul>").unwrap();
+
+    let sliced = &sliced[start..end];
+
+    // Extract all text found inside <font> elements
+    let mut words = Vec::new();
+    let mut groups = Vec::new();
+    let re = Regex::new(r"<font[^>]*>(.*?)</font>").unwrap();
+
+    for (i, caps) in re.captures_iter(sliced).enumerate() {
+        if let Some(matched) = caps.get(1) {
+            let cleaned_text = remove_unwanted_characters(matched.as_str());
+            // Split the text by ":"
+            let text = cleaned_text
+                .split(":")
+                .collect::<Vec<&str>>();
+            groups.push(Group {
+                name: text[0].trim().to_lowercase(),
+                ranking: Ranking::from_index(i),
+            });
+            let group_words = text[1]
+                .split(",")
+                .map(|w| Word{
+                    text: w.trim().to_lowercase(),
+                    group: groups[i].clone()
+                });
+            words.extend(group_words);
+        }
+    }
+
+    words.sort_by(|a, b| calculate_hash(a).cmp(&calculate_hash(b)));
+
+    let _ = db::store_game_cache::<(Vec<Group>, Vec<Word>)>(
+        conn,
+        &(groups.clone(), words.clone()),
+        date_offset
+    ).map_err(
+        |e| {
+            eprintln!("Failed to save game to cache: {}", e.to_string())
+        }
+    );
+
+    Ok((groups, words))
+
 }
 
 impl GroupThem {
@@ -238,6 +332,13 @@ mod tests {
         ];
 
         (groups.to_vec(), all_words.to_vec())
+    }
+
+    #[tokio::test]
+    async fn test_get_words(){
+        let conn = db::initialize_connection(true);
+        let result = get_data(&conn, 1).await.unwrap();
+        println!("{:?}", result);
     }
 
     #[test]

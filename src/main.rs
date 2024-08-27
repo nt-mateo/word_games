@@ -3,8 +3,8 @@ mod groupthem;
 mod wordguess;
 use errors::{DatabaseError, GameError};
 use game::Game;
-use groupthem::GroupThem;
-use models::{GameStatus, GroupThemRequest, User, UserRequest, WordGuessRequest, WORDS};
+use groupthem::{get_data, GroupThem};
+use models::{GameStatus, GroupThemRequest, User, UserRequest, WordGuessRequest};
 mod db;
 mod errors;
 mod models;
@@ -41,14 +41,6 @@ async fn groupthem_get_state(
 ) -> impl Responder {
     
     let conn = db::initialize_connection(false);
-    let _ = &conn.execute(
-        "CREATE TABLE IF NOT EXISTS users (
-            stale_token TEXT PRIMARY KEY,
-            fresh_token TEXT NOT NULL,
-            game_status TEXT
-        )",
-        [],
-    );
 
     let user = match get_user(req, &conn).await {
         Ok(user) => user,
@@ -65,11 +57,11 @@ async fn groupthem_get_state(
         }
     };
 
-    let all_words = WORDS.clone();
+    let game = get_data(&conn, 1).await.unwrap();
 
     let state = match user.game_status.get("group_them") {
         Some(GameStatus::GroupThem(group_item)) => group_item,
-        _ => &GroupThem::new(&all_words),
+        _ => &GroupThem::new(&game.1),
     };
 
     HttpResponse::Ok().json(state)
@@ -79,7 +71,6 @@ async fn groupthem_game(
     payload: web::Json<serde_json::Value>,
     req: actix_web::HttpRequest
 ) -> impl Responder {
-
     // Deserialize the request
     let request = match serde_json::from_value::<GroupThemRequest>(payload.into_inner()) {
         Ok(data) => data,
@@ -87,14 +78,6 @@ async fn groupthem_game(
     };
 
     let conn = db::initialize_connection(false);
-    let _ = &conn.execute(
-        "CREATE TABLE IF NOT EXISTS users (
-            stale_token TEXT PRIMARY KEY,
-            fresh_token TEXT NOT NULL,
-            game_status TEXT
-        )",
-        [],
-    );
 
     let user = match get_user(req, &conn).await {
         Ok(user) => user,
@@ -111,11 +94,12 @@ async fn groupthem_game(
         }
     };
 
-    let all_words = WORDS.clone();
+    let game = get_data(&conn, 1).await.unwrap();
+
 
     let state = match user.game_status.get("group_them") {
         Some(GameStatus::GroupThem(group_item)) => group_item,
-        _ => &GroupThem::new(&all_words),
+        _ => &GroupThem::new(&game.1),
     };
 
 
@@ -127,6 +111,7 @@ async fn groupthem_game(
                 GameError::MaximumGuesses => HttpResponse::BadRequest().body(e.to_string()),
                 GameError::GameOver => HttpResponse::Ok().body(e.to_string()),
                 GameError::InvalidGuess(e) => HttpResponse::BadRequest().body(e.to_string()),
+                GameError::NetworkError(e) => HttpResponse::InternalServerError().body(e.to_string())
             }
         }
     };
@@ -169,14 +154,7 @@ async fn wordguess_game(
         };
 
     let conn = db::initialize_connection(false);
-    let _ = &conn.execute(
-        "CREATE TABLE IF NOT EXISTS users (
-            stale_token TEXT PRIMARY KEY,
-            fresh_token TEXT NOT NULL,
-            game_status TEXT
-        )",
-        [],
-    );
+
 
     let user = match get_user(req, &conn).await {
         Ok(user) => user,
@@ -205,7 +183,8 @@ async fn wordguess_game(
             return match e {
                 GameError::MaximumGuesses => HttpResponse::BadRequest().body(e.to_string()),
                 GameError::GameOver => HttpResponse::Ok().body(e.to_string()),
-                GameError::InvalidGuess(e) => HttpResponse::BadRequest().body(e.to_string())
+                GameError::InvalidGuess(e) => HttpResponse::BadRequest().body(e.to_string()),
+                GameError::NetworkError(e) => HttpResponse::InternalServerError().body(e.to_string())
             }
         }
     };
@@ -242,14 +221,6 @@ async fn wordguess_get_state(
 ) -> impl Responder {
     
     let conn = db::initialize_connection(false);
-    let _ = &conn.execute(
-        "CREATE TABLE IF NOT EXISTS users (
-            stale_token TEXT PRIMARY KEY,
-            fresh_token TEXT NOT NULL,
-            game_status TEXT
-        )",
-        [],
-    );
 
     let user = match get_user(req, &conn).await {
         Ok(user) => user,
