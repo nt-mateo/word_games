@@ -6,6 +6,7 @@ use std::{collections::{hash_map::DefaultHasher, HashSet}, hash::{Hash, Hasher}}
 use crate::{
     db, errors::GameError, game::Game, models::{mix_colors, Group, GroupResult, Ranking, Word}
 };
+use html_escape::decode_html_entities;
 
 static MAXIMUM_BAD_GUESSES: u8 = 4;
 static GROUPS: u8 = 4;
@@ -45,9 +46,11 @@ pub async fn get_data(conn: &Connection, date_offset: usize) -> Result<(Vec<Grou
     let date = Local::now() - Duration::days(
         date_offset.min(365).max(0) as i64
     );
-    let date_formatted = date.format("%B-%d-%Y").to_string().to_lowercase();
+    let date_formatted = date.format("%B-%e-%Y").to_string().to_lowercase().replace("- ", "-").trim().to_string();
     
     let url = format!("https://www.connections-answer.com/posts/nyt-connections-answer-hint-{}", date_formatted);
+
+    println!("{:?}", url);
 
     let response = reqwest::get(&url)
     .await
@@ -73,23 +76,25 @@ pub async fn get_data(conn: &Connection, date_offset: usize) -> Result<(Vec<Grou
     let mut groups = Vec::new();
     let re = Regex::new(r"<font[^>]*>(.*?)</font>").unwrap();
 
+    println!("{:?}", sliced);
+
     for (i, caps) in re.captures_iter(sliced).enumerate() {
         if let Some(matched) = caps.get(1) {
             let cleaned_text = remove_unwanted_characters(matched.as_str());
-            // Split the text by ":"
-            let text = cleaned_text
-                .split(":")
-                .collect::<Vec<&str>>();
+
             groups.push(Group {
-                name: text[0].trim().to_lowercase(),
+                name: "Unknown".to_string(), // The site author changed the structure
                 ranking: Ranking::from_index(i),
             });
-            let group_words = text[1]
+
+            let group_words = cleaned_text
                 .split(",")
                 .map(|w| Word{
-                    text: w.trim().to_lowercase(),
+                    text: decode_html_entities(w.trim().to_lowercase().as_str()).to_string(),
                     group: groups[i].clone()
                 });
+            
+            println!("{:?}", group_words);
             words.extend(group_words);
         }
     }
@@ -167,7 +172,7 @@ impl Game<Vec<String>, Vec<Word>> for GroupThem {
     fn clean(&self, guess: Vec<String>) -> Result<Vec<Word>, Self::GameError> {
         let guess_set = guess
             .iter()
-            .map(|g| g.to_string())
+            .map(|g| g.to_string().to_lowercase())
             .collect::<HashSet<String>>();
 
         // * There wasn't 4 guesses made
@@ -206,6 +211,16 @@ impl Game<Vec<String>, Vec<Word>> for GroupThem {
                         guess
                     )));
                 }
+            }
+        }
+
+        // * A word is not in the available words
+        for word in &words {
+            if !self.available_words.iter().any(|w| w.text == word.text) {
+                return Err(GameError::InvalidGuess(format!(
+                    "Word is not in the available words: {}",
+                    word.text
+                )));
             }
         }
 
@@ -332,6 +347,16 @@ mod tests {
         ];
 
         (groups.to_vec(), all_words.to_vec())
+    }
+
+    #[test]
+    fn test_decode_html_entities() {
+        let result = decode_html_entities("&amp;").to_string();
+        let result_2 = decode_html_entities("pandora&rsquo;s box").to_string();
+        println!("{:?}", result);
+        println!("{:?}", result_2);
+        assert_eq!(result, "&".to_string());
+        assert_eq!(result_2, "pandora’s box".to_string());
     }
 
     #[tokio::test]
